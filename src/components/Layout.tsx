@@ -13,8 +13,13 @@ import {
   X,
   Plus,
   Bell,
+  Search,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { cn } from "@/lib/utils";
 
 const navigationItems = [
@@ -44,9 +49,43 @@ const Layout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mode, setMode] = useState('real');
   const [modeLoading, setModeLoading] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+
+  // Phase 6: Keyboard shortcut for command palette
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCommandOpen(open => !open);
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
+
+  // Phase 12: Dark mode toggle
+  useEffect(() => {
+    const savedDarkMode = localStorage.getItem('darkMode') === 'true';
+    setDarkMode(savedDarkMode);
+    if (savedDarkMode) {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const handleDarkModeToggle = () => {
+    const newMode = !darkMode;
+    setDarkMode(newMode);
+    localStorage.setItem('darkMode', String(newMode));
+    if (newMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
 
   useEffect(() => {
     fetch('/api/v1/system/mode')
@@ -183,9 +222,52 @@ const Layout = () => {
                 <h2 className="text-xl font-semibold text-foreground">
                   Trading Journal 2090
                 </h2>
+                {/* Phase 6: Breadcrumb navigation */}
+                <Breadcrumb className="hidden md:flex">
+                  <BreadcrumbList>
+                    <BreadcrumbItem>
+                      <BreadcrumbLink href="/dashboard">Dashboard</BreadcrumbLink>
+                    </BreadcrumbItem>
+                    {location.pathname !== "/dashboard" && (
+                      <>
+                        <BreadcrumbSeparator />
+                        <BreadcrumbItem>
+                          <BreadcrumbPage>
+                            {navigationItems.find(item => item.href === location.pathname)?.name || "Page"}
+                          </BreadcrumbPage>
+                        </BreadcrumbItem>
+                      </>
+                    )}
+                  </BreadcrumbList>
+                </Breadcrumb>
               </div>
 
               <div className="flex items-center space-x-4">
+                {/* Phase 6: Command palette trigger */}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setCommandOpen(true)}
+                  className="hidden sm:inline-flex gap-2 text-muted-foreground"
+                >
+                  <Search className="h-4 w-4" />
+                  <span>Search...</span>
+                  <kbd className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                    <span className="text-xs">⌘</span>K
+                  </kbd>
+                </Button>
+
+                {/* Phase 12: Dark mode toggle */}
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={handleDarkModeToggle}
+                  className="relative"
+                  title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+                >
+                  {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+                </Button>
+
                 <Button variant="ghost" size="sm" className="relative">
                   <Bell className="h-5 w-5" />
                   <span className="absolute -top-1 -right-1 h-3 w-3 bg-primary rounded-full glow-primary" />
@@ -204,6 +286,40 @@ const Layout = () => {
               </div>
             </div>
           </header>
+
+          {/* Phase 6: Command Dialog for quick navigation */}
+          <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
+            <CommandInput placeholder="Search pages, trades, stats..." />
+            <CommandList>
+              <CommandEmpty>No results found.</CommandEmpty>
+              <CommandGroup heading="Navigation">
+                {navigationItems.map((item) => (
+                  <CommandItem
+                    key={item.name}
+                    onSelect={() => {
+                      navigate(item.href);
+                      setCommandOpen(false);
+                    }}
+                  >
+                    <item.icon className="mr-2 h-4 w-4" />
+                    <span>{item.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+              <CommandGroup heading="Actions">
+                <CommandItem
+                  onSelect={() => {
+                    logout();
+                    navigate('/login');
+                    setCommandOpen(false);
+                  }}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Sign Out</span>
+                </CommandItem>
+              </CommandGroup>
+            </CommandList>
+          </CommandDialog>
 
           {/* Page content */}
           <main className="flex-1 p-6">

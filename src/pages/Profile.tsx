@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { User, Mail, Lock, Camera, Save, Bell, Shield } from "lucide-react";
+import { User, Mail, Lock, Camera, Save, Bell, Shield, Heart } from "lucide-react";
 import { authAPI, statsAPI } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function Profile() {
   const [profileData, setProfileData] = useState({
@@ -20,6 +23,15 @@ export default function Profile() {
   const [accountStats, setAccountStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [openAvatarDialog, setOpenAvatarDialog] = useState(false);
+  const [preferredPairs, setPreferredPairs] = useState({
+    eurusd: true,
+    gbpusd: false,
+    usdjpy: true,
+    audusd: false,
+    nzdusd: false,
+    usdcad: true,
+  });
 
   useEffect(() => {
     async function fetchProfile() {
@@ -56,6 +68,10 @@ export default function Profile() {
 
   const handleNotificationChange = (field: string) => (checked: boolean) => {
     setNotifications(prev => ({ ...prev, [field]: checked }));
+  };
+
+  const handlePreferredPairChange = (pair: string) => (checked: boolean) => {
+    setPreferredPairs(prev => ({ ...prev, [pair]: checked }));
   };
 
   const handleSaveProfile = () => {
@@ -98,21 +114,43 @@ export default function Profile() {
               <CardDescription>Update your personal details</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Profile Picture */}
+              {/* Phase 5: Profile Picture with Avatar and Dialog */}
               <div className="flex items-center space-x-6">
-                <div className="relative">
-                  <div className="h-20 w-20 bg-gradient-primary rounded-full flex items-center justify-center glow-primary">
-                    <User className="h-10 w-10 text-primary-foreground" />
+                <Dialog open={openAvatarDialog} onOpenChange={setOpenAvatarDialog}>
+                  <div className="relative group">
+                    <Avatar className="h-20 w-20 border-2 border-primary">
+                      <AvatarImage src="https://github.com/shadcn.png" alt="Profile" />
+                      <AvatarFallback className="bg-gradient-primary text-primary-foreground">
+                        {profileData.name ? profileData.name.substring(0, 2).toUpperCase() : "US"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <DialogTrigger asChild>
+                      <Button
+                        size="sm"
+                        className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-accent p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                    </DialogTrigger>
                   </div>
-                  <Button
-                    size="sm"
-                    className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-accent p-0"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </Button>
-                </div>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Update Profile Picture</DialogTitle>
+                      <DialogDescription>
+                        Upload a new profile picture. Max size: 1MB (JPG, GIF, or PNG)
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                      <Input type="file" accept="image/*" />
+                      <div className="flex gap-2">
+                        <Button className="flex-1">Upload</Button>
+                        <Button variant="outline" className="flex-1" onClick={() => setOpenAvatarDialog(false)}>Cancel</Button>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
                 <div>
-                  <h3 className="font-medium text-foreground">Profile Picture</h3>
+                  <h3 className="font-medium text-foreground">{profileData.name || "Your Profile"}</h3>
                   <p className="text-sm text-muted-foreground">JPG, GIF or PNG. 1MB max.</p>
                 </div>
               </div>
@@ -263,6 +301,41 @@ export default function Profile() {
                   onCheckedChange={handleNotificationChange("marketNews")}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Phase 5: Preferred Trading Pairs with Checkboxes */}
+          <Card className="glass border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center text-foreground">
+                <Heart className="h-5 w-5 mr-2 text-red-500" />
+                Preferred Trading Pairs
+              </CardTitle>
+              <CardDescription>Select the pairs you trade most frequently</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {Object.entries(preferredPairs).map(([pair, checked]) => (
+                  <div key={pair} className="flex items-center space-x-2">
+                    <Checkbox 
+                      id={pair}
+                      checked={checked}
+                      onCheckedChange={handlePreferredPairChange(pair)}
+                    />
+                    <Label htmlFor={pair} className="text-foreground capitalize cursor-pointer">
+                      {pair.toUpperCase()}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+              <Button 
+                onClick={() => console.log("Saving preferred pairs:", preferredPairs)}
+                size="sm"
+                className="bg-gradient-primary hover:glow-primary transition-smooth"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                Save Preferences
+              </Button>
             </CardContent>
           </Card>
 
