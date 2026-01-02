@@ -1,9 +1,19 @@
-class Settings:
-    SECRET_KEY = "devsecretkey2090"
-    ALGORITHM = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES = 60
+from pydantic_settings import BaseSettings
+from functools import lru_cache
 import os
 
-DATA_MODE = os.getenv('DATA_MODE', 'real')  # Options: 'test', 'real', 'seed'
+class Settings(BaseSettings):
+    SECRET_KEY: str = "devsecretkey2090"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    DATABASE_URL: str = "sqlite:///./trading_journal.db"
+    DATA_MODE: str = os.getenv('DATA_MODE', 'real')
+    
+    class Config:
+        env_file = ".env"
 
-settings = Settings()
+@lru_cache()
+def get_settings():
+    return Settings()
+
+settings = get_settings()
