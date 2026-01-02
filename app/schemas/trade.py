@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, computed_field
 from typing import Optional
 from datetime import datetime
 from app.models.trade import TradeDirection, TradeStatus
@@ -29,14 +29,49 @@ class TradeUpdate(BaseModel):
 class TradeRead(TradeBase):
     id: int
     exit_price: Optional[float]
-    risk_reward: Optional[float]
-    result_pips: Optional[float]
-    result_usd: Optional[float]
     status: TradeStatus
     opened_at: datetime
     closed_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
+
+    @computed_field
+    @property
+    def risk_reward(self) -> Optional[float]:
+        """Calculate risk:reward ratio if trade is closed"""
+        if self.status != TradeStatus.CLOSED or not self.exit_price or not self.stop_loss or not self.take_profit:
+            return None
+        
+        risk = abs(self.entry_price - self.stop_loss)
+        reward = abs(self.take_profit - self.entry_price)
+        
+        if risk == 0:
+            return None
+        return reward / risk
+
+    @computed_field
+    @property
+    def result_usd(self) -> Optional[float]:
+        """Calculate profit/loss in USD if trade is closed"""
+        if self.status != TradeStatus.CLOSED or not self.exit_price:
+            return None
+        
+        if self.direction == TradeDirection.BUY:
+            return (self.exit_price - self.entry_price) * self.position_size
+        else:  # SELL
+            return (self.entry_price - self.exit_price) * self.position_size
+
+    @computed_field
+    @property
+    def result_pips(self) -> Optional[float]:
+        """Calculate profit/loss in pips if trade is closed"""
+        if self.status != TradeStatus.CLOSED or not self.exit_price:
+            return None
+        
+        if self.direction == TradeDirection.BUY:
+            return (self.exit_price - self.entry_price) * 10000
+        else:  # SELL
+            return (self.entry_price - self.exit_price) * 10000
 
     class Config:
         from_attributes = True
