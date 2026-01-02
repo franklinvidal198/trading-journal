@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api/v1';
 
 // Create axios instance
 export const api = axios.create({
@@ -30,7 +30,6 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear token and redirect to login
       localStorage.removeItem('token');
       window.location.href = '/login';
     }
@@ -74,11 +73,43 @@ export interface TradingStats {
   total_trades: number;
   winning_trades: number;
   losing_trades: number;
+  daily_profit?: number;
+  max_loss?: number;
 }
 
 export interface EquityPoint {
   date: string;
   balance: number;
+}
+
+export interface PnLByPair {
+  pair: string;
+  wins: number;
+  losses: number;
+  total_pnl: number;
+}
+
+export interface WinLossDistribution {
+  wins: number;
+  win_percentage: number;
+  losses: number;
+  loss_percentage: number;
+}
+
+export interface DailyPerformance {
+  date: string;
+  profit: number;
+  trades: number;
+}
+
+export interface DateRangeStats {
+  total_trades: number;
+  winning_trades: number;
+  losing_trades: number;
+  win_rate: number;
+  avg_risk_reward: number;
+  total_profit: number;
+  avg_profit: number;
 }
 
 // Auth API
@@ -147,6 +178,28 @@ export const statsAPI = {
   
   getEquityCurve: async (): Promise<EquityPoint[]> => {
     const response = await api.get('/stats/equity_curve');
+    return response.data;
+  },
+
+  getPnLByPair: async (): Promise<PnLByPair[]> => {
+    const response = await api.get('/stats/pnl_by_pair');
+    return response.data;
+  },
+
+  getWinLossDistribution: async (): Promise<WinLossDistribution> => {
+    const response = await api.get('/stats/win_loss_distribution');
+    return response.data;
+  },
+
+  getDailyPerformance: async (days: number = 30): Promise<DailyPerformance[]> => {
+    const response = await api.get('/stats/daily_performance', { params: { days } });
+    return response.data;
+  },
+
+  getStatsByDateRange: async (startDate?: string, endDate?: string): Promise<DateRangeStats> => {
+    const response = await api.get('/stats/by_date_range', { 
+      params: { start_date: startDate, end_date: endDate } 
+    });
     return response.data;
   },
 };
