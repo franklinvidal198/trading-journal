@@ -1,42 +1,62 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Download, Calendar } from 'lucide-react'
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Download, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-
-const monthlyData = [
-  { month: 'Jan', profit: 450, trades: 12, winRate: 58 },
-  { month: 'Feb', profit: 620, trades: 15, winRate: 62 },
-  { month: 'Mar', profit: 380, trades: 10, winRate: 55 },
-]
-
-const pairData = [
-  { name: 'EUR/USD', value: 45, profit: 680 },
-  { name: 'GBP/USD', value: 30, profit: 450 },
-  { name: 'USD/JPY', value: 15, profit: 220 },
-  { name: 'AUD/USD', value: 10, profit: 150 },
-]
-
-const weeklyData = [
-  { week: 'W1', profit: 120, loss: 50 },
-  { week: 'W2', profit: 180, loss: 30 },
-  { week: 'W3', profit: 95, loss: 40 },
-  { week: 'W4', profit: 205, loss: 45 },
-]
+import { reportsAPI } from '@/lib/api'
+import { useToast } from '@/components/ui/use-toast'
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444']
 
 export default function Reports() {
-  const [selectedMonth, setSelectedMonth] = useState('2024-01')
-  const [exportFormat, setExportFormat] = useState('pdf')
+  const { toast } = useToast()
+  const [loading, setLoading] = useState(true)
+  const [summary, setSummary] = useState<any>(null)
+  const [pairStats, setPairStats] = useState<any>(null)
 
-  const handleExport = (format: string) => {
-    // TODO: Implement export functionality
-    console.log(`Exporting as ${format}`)
+  useEffect(() => {
+    fetchReportData()
+  }, [])
+
+  const fetchReportData = async () => {
+    try {
+      setLoading(true)
+      const [summaryData, pairData] = await Promise.all([
+        reportsAPI.getSummary(),
+        reportsAPI.getPairStats()
+      ])
+      setSummary(summaryData)
+      setPairStats(pairData)
+    } catch (error) {
+      console.error('Failed to fetch reports:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load report data',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
+    }
   }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading reports...</p>
+        </div>
+      </div>
+    )
+  }
+
+  const pairChartData = pairStats ? Object.entries(pairStats).map(([pair, data]: any) => ({
+    name: pair,
+    value: data.win_rate || 0,
+    profit: data.total_profit || 0
+  })) : []
 
   return (
     <div className="space-y-6">
@@ -45,241 +65,163 @@ export default function Reports() {
           <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
           <p className="text-muted-foreground">Analyze your trading performance</p>
         </div>
-        <div className="flex gap-2">
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-48">
-              <Calendar className="w-4 h-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="2024-01">January 2024</SelectItem>
-              <SelectItem value="2024-02">February 2024</SelectItem>
-              <SelectItem value="2024-03">March 2024</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button 
-            onClick={() => handleExport('pdf')}
-            className="gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Export PDF
-          </Button>
-          <Button 
-            variant="outline"
-            onClick={() => handleExport('csv')}
-            className="gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </Button>
-        </div>
+        <Button className="gap-2">
+          <Download className="w-4 h-4" />
+          Export Report
+        </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Profit</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">$1,450</div>
-            <p className="text-xs text-muted-foreground mt-1">+12% from previous month</p>
-          </CardContent>
-        </Card>
+      {summary && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Trades</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{summary.total_trades}</div>
+              <p className="text-xs text-muted-foreground">
+                {summary.closed_trades} closed, {summary.open_trades} open
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Trades</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">37</div>
-            <p className="text-xs text-muted-foreground mt-1">12 winning, 25 losing</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Win Rate</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${summary.win_rate >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                {summary.win_rate?.toFixed(1)}%
+              </div>
+              <Badge variant={summary.win_rate >= 50 ? "default" : "destructive"} className="mt-2">
+                {summary.win_rate >= 50 ? 'Positive' : 'Negative'}
+              </Badge>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Win Rate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">61.5%</div>
-            <Badge className="mt-2 bg-green-100 text-green-800">Above Target</Badge>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Profit/Loss</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${summary.total_profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ${summary.total_profit?.toFixed(2)}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Avg: ${summary.average_profit?.toFixed(2)} per trade
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg P&L</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$39.19</div>
-            <p className="text-xs text-muted-foreground mt-1">Per trade</p>
-          </CardContent>
-        </Card>
-      </div>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">ROI</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${summary.roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {summary.roi?.toFixed(1)}%
+              </div>
+              <p className="text-xs text-muted-foreground">Return on investment</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Charts */}
-      <Tabs defaultValue="monthly" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="monthly">Monthly Performance</TabsTrigger>
-          <TabsTrigger value="pairs">Pair Distribution</TabsTrigger>
-          <TabsTrigger value="weekly">Weekly Results</TabsTrigger>
+      <Tabs defaultValue="pair" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="pair">By Pair</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="monthly" className="space-y-4">
+        <TabsContent value="pair" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Profit Trend</CardTitle>
-              <CardDescription>Monthly profit over time</CardDescription>
+              <CardTitle>Performance by Currency Pair</CardTitle>
+              <CardDescription>Win rate and profit by trading pair</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="profit" stroke="#10b981" name="Profit ($)" />
-                </LineChart>
-              </ResponsiveContainer>
+              {pairChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pairChartData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({name, value}) => `${name}: ${value}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pairChartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-64 text-muted-foreground">
+                  No pair data available
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Win Rate Trend</CardTitle>
-              <CardDescription>Win rate percentage by month</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={monthlyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="winRate" fill="#3b82f6" name="Win Rate (%)" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pairStats && Object.entries(pairStats).map(([pair, data]: any) => (
+              <Card key={pair}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-lg">{pair}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Trades</p>
+                    <p className="text-2xl font-bold">{data.total_trades}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Win Rate</p>
+                    <p className={`text-lg font-semibold ${data.win_rate >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                      {data.win_rate?.toFixed(1)}%
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Profit/Loss</p>
+                    <p className={`text-lg font-semibold ${data.total_profit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ${data.total_profit?.toFixed(2)}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </TabsContent>
 
-        <TabsContent value="pairs" className="space-y-4">
+        <TabsContent value="performance">
           <Card>
             <CardHeader>
-              <CardTitle>Profit by Currency Pair</CardTitle>
-              <CardDescription>Distribution of trades across pairs</CardDescription>
+              <CardTitle>Trading Performance</CardTitle>
+              <CardDescription>Your trading metrics and statistics</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={pairData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {pairData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Performing Pairs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {pairData.map(pair => (
-                  <div key={pair.name} className="flex items-center justify-between">
-                    <div className="font-medium">{pair.name}</div>
-                    <div className="text-right">
-                      <p className="font-semibold text-green-600">${pair.profit}</p>
-                      <p className="text-xs text-muted-foreground">{pair.value}% of trades</p>
-                    </div>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Closed Trades</p>
+                    <p className="text-3xl font-bold">{summary?.closed_trades}</p>
                   </div>
-                ))}
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Open Trades</p>
+                    <p className="text-3xl font-bold">{summary?.open_trades}</p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
-
-        <TabsContent value="weekly" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Weekly Profit/Loss</CardTitle>
-              <CardDescription>Weekly performance breakdown</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={weeklyData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="week" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="profit" fill="#10b981" name="Profit" />
-                  <Bar dataKey="loss" fill="#ef4444" name="Loss" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
-
-      {/* Detailed Stats */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Detailed Statistics</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-muted-foreground text-sm">Best Trade</p>
-              <p className="text-2xl font-bold text-green-600">+$250</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Worst Trade</p>
-              <p className="text-2xl font-bold text-red-600">-$150</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Avg Win</p>
-              <p className="text-2xl font-bold">+$65</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Avg Loss</p>
-              <p className="text-2xl font-bold">-$42</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Largest Drawdown</p>
-              <p className="text-2xl font-bold">-$380</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Profit Factor</p>
-              <p className="text-2xl font-bold">2.15</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Winning Days</p>
-              <p className="text-2xl font-bold">18</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground text-sm">Losing Days</p>
-              <p className="text-2xl font-bold">8</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

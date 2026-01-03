@@ -1,122 +1,155 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Slider } from '@/components/ui/slider'
 import { Progress } from '@/components/ui/progress'
-import { Plus, Trash2, Target, Flame } from 'lucide-react'
+import { Plus, Trash2, Target, Flame, Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
-
-interface Goal {
-  id: string
-  type: 'WIN_RATE' | 'PNL' | 'TRADES'
-  period: 'MONTHLY' | 'QUARTERLY'
-  targetValue: number
-  currentValue: number
-  unit: string
-  createdAt: string
-}
-
-interface Streak {
-  type: string
-  count: number
-  percentage: number
-}
+import { goalsAPI, TradingGoal, TradeStreak } from '@/lib/api'
+import { useToast } from '@/components/ui/use-toast'
 
 export default function Goals() {
-  const [goals, setGoals] = useState<Goal[]>([
-    {
-      id: '1',
-      type: 'WIN_RATE',
-      period: 'MONTHLY',
-      targetValue: 60,
-      currentValue: 58,
-      unit: '%',
-      createdAt: '2024-01-15'
-    },
-    {
-      id: '2',
-      type: 'PNL',
-      period: 'MONTHLY',
-      targetValue: 500,
-      currentValue: 320,
-      unit: '$',
-      createdAt: '2024-01-15'
-    },
-    {
-      id: '3',
-      type: 'TRADES',
-      period: 'MONTHLY',
-      targetValue: 20,
-      currentValue: 13,
-      unit: 'trades',
-      createdAt: '2024-01-15'
-    }
-  ])
-
-  const [streaks] = useState<Streak[]>([
-    { type: 'Consecutive Wins', count: 3, percentage: 100 },
-    { type: 'Days Without Loss', count: 5, percentage: 100 },
-    { type: 'Profitable Weeks', count: 2, percentage: 100 },
-  ])
-
-  const [newGoal, setNewGoal] = useState({
-    type: 'WIN_RATE' as const,
-    period: 'MONTHLY' as const,
-    targetValue: 60
-  })
-
+  const { toast } = useToast()
+  const [goals, setGoals] = useState<TradingGoal[]>([])
+  const [streaks, setStreaks] = useState<TradeStreak[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const handleAddGoal = () => {
-    const goal: Goal = {
-      id: Date.now().toString(),
-      ...newGoal,
-      currentValue: 0,
-      unit: newGoal.type === 'WIN_RATE' ? '%' : newGoal.type === 'PNL' ? '$' : 'trades',
-      createdAt: new Date().toISOString().split('T')[0]
+  const [newGoal, setNewGoal] = useState({
+    goal_type: 'WIN_RATE',
+    period: 'MONTHLY',
+    target_value: 60,
+    current_value: 0
+  })
+
+  // Fetch goals and streaks on mount
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const [goalsData, streaksData] = await Promise.all([
+        goalsAPI.getGoals({ limit: 50 }),
+        goalsAPI.getStreaks({ limit: 50 })
+      ])
+      setGoals(goalsData.data)
+      setStreaks(streaksData.data)
+    } catch (error) {
+      console.error('Failed to fetch data:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load goals and streaks',
+        variant: 'destructive'
+      })
+    } finally {
+      setLoading(false)
     }
-    setGoals([goal, ...goals])
-    setNewGoal({
-      type: 'WIN_RATE',
-      period: 'MONTHLY',
-      targetValue: 60
-    })
-    setDialogOpen(false)
   }
 
-  const handleDeleteGoal = (id: string) => {
-    setGoals(goals.filter(g => g.id !== id))
+  const handleAddGoal = async () => {
+    if (!newGoal.goal_type || !newGoal.period || newGoal.target_value <= 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    try {
+      setSaving(true)
+      const createdGoal = await goalsAPI.createGoal({
+        goal_type: newGoal.goal_type,
+        period: newGoal.period,
+        target_value: newGoal.target_value,
+        current_value: newGoal.current_value || 0
+      })
+      
+      setGoals([createdGoal, ...goals])
+      setNewGoal({
+        goal_type: 'WIN_RATE',
+        period: 'MONTHLY',
+        target_value: 60,
+        current_value: 0
+      })
+      setDialogOpen(false)
+      
+      toast({
+        title: 'Success',
+        description: 'Goal created successfully'
+      })
+    } catch (error) {
+      console.error('Failed to create goal:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to create goal',
+        variant: 'destructive'
+      })
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const getGoalLabel = (type: string) => {
+  const handleDeleteGoal = async (id: number) => {
+    try {
+      await goalsAPI.deleteGoal(id)
+      setGoals(goals.filter(g => g.id !== id))
+      toast({
+        title: 'Success',
+        description: 'Goal deleted successfully'
+      })
+    } catch (error) {
+      console.error('Failed to delete goal:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete goal',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const getGoalTypeLabel = (type: string) => {
     switch (type) {
-      case 'WIN_RATE':
-        return 'Win Rate Target'
-      case 'PNL':
-        return 'Profit Target'
-      case 'TRADES':
-        return 'Trade Count Target'
-      default:
-        return 'Goal'
+      case 'WIN_RATE': return 'Win Rate'
+      case 'PNL': return 'Profit & Loss'
+      case 'TRADES': return 'Number of Trades'
+      default: return type
     }
   }
 
-  const getProgressPercentage = (goal: Goal) => {
-    return Math.round((goal.currentValue / goal.targetValue) * 100)
+  const getGoalUnit = (type: string) => {
+    switch (type) {
+      case 'WIN_RATE': return '%'
+      case 'PNL': return '$'
+      case 'TRADES': return ''
+      default: return ''
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading goals...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Goals & Streaks</h1>
-          <p className="text-muted-foreground">Track your trading goals and achievements</p>
+          <h1 className="text-3xl font-bold tracking-tight">Trading Goals</h1>
+          <p className="text-muted-foreground">Set and track your trading objectives</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -127,53 +160,50 @@ export default function Goals() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>New Trading Goal</DialogTitle>
+              <DialogTitle>Create New Goal</DialogTitle>
               <DialogDescription>
-                Set a goal to keep yourself motivated and accountable
+                Set a trading goal to track your progress
               </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Goal Type</Label>
-                <RadioGroup value={newGoal.type} onValueChange={(value) => setNewGoal({...newGoal, type: value as any})}>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="WIN_RATE" id="win-rate" />
-                    <Label htmlFor="win-rate" className="font-normal">Win Rate (%)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="PNL" id="pnl" />
-                    <Label htmlFor="pnl" className="font-normal">Profit Target ($)</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="TRADES" id="trades" />
-                    <Label htmlFor="trades" className="font-normal">Number of Trades</Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="period">Time Period</Label>
-                <Select value={newGoal.period} onValueChange={(value) => setNewGoal({...newGoal, period: value as any})}>
-                  <SelectTrigger id="period">
+                <Label htmlFor="type">Goal Type</Label>
+                <Select value={newGoal.goal_type} onValueChange={(value) => setNewGoal({...newGoal, goal_type: value})}>
+                  <SelectTrigger id="type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="MONTHLY">Monthly</SelectItem>
-                    <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                    <SelectItem value="WIN_RATE">Win Rate (%)</SelectItem>
+                    <SelectItem value="PNL">Profit & Loss ($)</SelectItem>
+                    <SelectItem value="TRADES">Number of Trades</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-3">
-                <Label htmlFor="target">Target Value: {newGoal.targetValue}</Label>
-                <Slider 
+              <div className="space-y-2">
+                <Label htmlFor="period">Period</Label>
+                <Select value={newGoal.period} onValueChange={(value) => setNewGoal({...newGoal, period: value})}>
+                  <SelectTrigger id="period">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WEEKLY">Weekly</SelectItem>
+                    <SelectItem value="MONTHLY">Monthly</SelectItem>
+                    <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                    <SelectItem value="YEARLY">Yearly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="target">Target Value</Label>
+                <Input 
                   id="target"
-                  min={newGoal.type === 'WIN_RATE' ? 50 : 1}
-                  max={newGoal.type === 'WIN_RATE' ? 100 : newGoal.type === 'PNL' ? 5000 : 100}
-                  step={newGoal.type === 'WIN_RATE' ? 5 : 10}
-                  value={[newGoal.targetValue]}
-                  onValueChange={(value) => setNewGoal({...newGoal, targetValue: value[0]})}
+                  type="number"
+                  placeholder="Enter target value"
+                  value={newGoal.target_value}
+                  onChange={(e) => setNewGoal({...newGoal, target_value: parseFloat(e.target.value) || 0})}
                 />
               </div>
 
@@ -181,8 +211,15 @@ export default function Goals() {
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddGoal}>
-                  Create Goal
+                <Button onClick={handleAddGoal} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    'Create Goal'
+                  )}
                 </Button>
               </div>
             </div>
@@ -190,110 +227,87 @@ export default function Goals() {
         </Dialog>
       </div>
 
-      {/* Current Goals */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-          <Target className="w-5 h-5" />
-          Current Goals
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {goals.map(goal => (
-            <Card key={goal.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base">{getGoalLabel(goal.type)}</CardTitle>
-                    <CardDescription className="text-xs mt-1">{goal.period}</CardDescription>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => handleDeleteGoal(goal.id)}
-                    className="text-red-500 hover:text-red-600 h-6 w-6 p-0"
-                  >
-                    ×
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div>
-                  <div className="flex justify-between items-baseline mb-2">
-                    <span className="text-2xl font-bold">
-                      {goal.currentValue}{goal.unit}
-                    </span>
-                    <span className="text-muted-foreground text-sm">
-                      / {goal.targetValue}{goal.unit}
-                    </span>
-                  </div>
-                  <Progress value={getProgressPercentage(goal)} className="h-2" />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {getProgressPercentage(goal)}% Complete
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Streaks */}
-      <div>
-        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-          <Flame className="w-5 h-5 text-orange-500" />
-          Streaks
-        </h2>
-        <ScrollArea className="rounded-lg border">
-          <div className="space-y-3 p-4">
-            {streaks.map((streak, idx) => (
-              <Card key={idx}>
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Flame className="w-5 h-5 text-orange-500" />
-                      <div>
-                        <p className="font-semibold">{streak.type}</p>
-                        <p className="text-2xl font-bold text-orange-500">{streak.count}</p>
+      {/* Goals Section */}
+      <ScrollArea className="h-[500px] rounded-lg border">
+        <div className="space-y-4 p-4">
+          {goals.length > 0 ? (
+            goals.map(goal => (
+              <Card key={goal.id}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Target className="w-4 h-4 text-primary" />
+                        <CardTitle className="text-lg">
+                          {getGoalTypeLabel(goal.goal_type)} - {goal.period}
+                        </CardTitle>
+                        <Badge variant={goal.is_on_track ? "default" : "destructive"}>
+                          {goal.is_on_track ? 'On Track' : 'Behind'}
+                        </Badge>
                       </div>
                     </div>
-                    <Badge className="bg-green-100 text-green-800">
-                      {streak.percentage}%
-                    </Badge>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleDeleteGoal(goal.id)}
+                      className="text-red-500 hover:text-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className="font-semibold">
+                        {goal.current_value}{getGoalUnit(goal.goal_type)} / {goal.target_value}{getGoalUnit(goal.goal_type)}
+                      </span>
+                    </div>
+                    <Progress value={goal.progress_percentage} className="h-2" />
+                    <p className="text-xs text-muted-foreground text-right">
+                      {goal.progress_percentage.toFixed(1)}% complete
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <div className="flex items-center justify-center h-32">
+              <p className="text-muted-foreground">No goals yet. Create your first goal!</p>
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+
+      {/* Streaks Section */}
+      {streaks.length > 0 && (
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight mb-4">Trading Streaks</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {streaks.map(streak => (
+              <Card key={streak.id}>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Flame className={`w-5 h-5 ${streak.current_count > 0 ? 'text-orange-500' : 'text-gray-400'}`} />
+                    {streak.streak_type}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Current Streak</p>
+                    <p className="text-3xl font-bold text-primary">{streak.current_count}</p>
+                  </div>
+                  <div className="border-t pt-2">
+                    <p className="text-xs text-muted-foreground">Best Streak</p>
+                    <p className="text-2xl font-bold">{streak.best_count}</p>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-        </ScrollArea>
-      </div>
-
-      {/* Stats Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Goal Progress Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-muted-foreground text-sm">Active Goals</p>
-              <p className="text-3xl font-bold">{goals.length}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-muted-foreground text-sm">On Track</p>
-              <p className="text-3xl font-bold text-green-600">
-                {goals.filter(g => getProgressPercentage(g) >= 80).length}
-              </p>
-            </div>
-            <div className="text-center">
-              <p className="text-muted-foreground text-sm">Average Progress</p>
-              <p className="text-3xl font-bold">
-                {Math.round(
-                  goals.reduce((acc, g) => acc + getProgressPercentage(g), 0) / goals.length
-                )}%
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      )}
     </div>
   )
 }
