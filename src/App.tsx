@@ -10,6 +10,11 @@ import Dashboard from "./pages/Dashboard";
 import Trades from "./pages/Trades";
 import Stats from "./pages/Stats";
 import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import Journal from "./pages/Journal";
+import Templates from "./pages/Templates";
+import Goals from "./pages/Goals";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -34,6 +39,11 @@ const App = () => (
                 <Route path="trades" element={<Trades />} />
                 <Route path="stats" element={<Stats />} />
                 <Route path="profile" element={<Profile />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="journal" element={<Journal />} />
+                <Route path="templates" element={<Templates />} />
+                <Route path="goals" element={<Goals />} />
+                <Route path="reports" element={<Reports />} />
               </Route>
               {/* 404 catch-all */}
               <Route path="*" element={<NotFound />} />
