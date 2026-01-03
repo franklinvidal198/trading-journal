@@ -175,27 +175,6 @@ export default function Templates() {
     )
   }
 
-  const handleEditTemplate = (template: TradeTemplate) => {
-    setNewTemplate({
-      name: template.name,
-      pair: template.pair,
-      trade_type: template.trade_type,
-      entry_strategy: template.entry_strategy,
-      exit_strategy: template.exit_strategy,
-      risk_reward: template.risk_reward
-    })
-    setEditingId(template.id)
-    setDialogOpen(true)
-  }
-
-  const handleUseTemplate = (template: TradeTemplate) => {
-    // TODO: Navigate to new trade with template data
-    toast({
-      title: "Loading Template",
-      description: `Creating new trade with ${template.name} template...`
-    })
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -226,13 +205,13 @@ export default function Templates() {
                     id="name"
                     placeholder="e.g., Breakout Entry"
                     value={newTemplate.name}
-                    onChange={(e) => setNewTemplate({...newTemplate, name: e.target.value})}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTemplate({...newTemplate, name: e.target.value})}
                   />
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="pair">Currency Pair</Label>
-                  <Select value={newTemplate.pair} onValueChange={(value) => setNewTemplate({...newTemplate, pair: value})}>
+                  <Select value={newTemplate.pair} onValueChange={(value: string) => setNewTemplate({...newTemplate, pair: value})}>
                     <SelectTrigger id="pair">
                       <SelectValue placeholder="Select pair" />
                     </SelectTrigger>
@@ -250,7 +229,7 @@ export default function Templates() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="type">Trade Type</Label>
-                  <Select value={newTemplate.trade_type} onValueChange={(value) => setNewTemplate({...newTemplate, trade_type: value})}>
+                  <Select value={newTemplate.trade_type} onValueChange={(value: string) => setNewTemplate({...newTemplate, trade_type: value})}>
                     <SelectTrigger id="type">
                       <SelectValue />
                     </SelectTrigger>
@@ -269,7 +248,7 @@ export default function Templates() {
                     step="0.1"
                     placeholder="1.5"
                     value={newTemplate.risk_reward}
-                    onChange={(e) => setNewTemplate({...newTemplate, risk_reward: parseFloat(e.target.value) || 1})}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewTemplate({...newTemplate, risk_reward: parseFloat(e.target.value) || 1})}
                   />
                 </div>
               </div>
@@ -281,7 +260,7 @@ export default function Templates() {
                   placeholder="Describe your entry conditions..."
                   rows={3}
                   value={newTemplate.entry_strategy}
-                  onChange={(e) => setNewTemplate({...newTemplate, entry_strategy: e.target.value})}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewTemplate({...newTemplate, entry_strategy: e.target.value})}
                 />
               </div>
 
@@ -292,7 +271,7 @@ export default function Templates() {
                   placeholder="Describe your exit conditions..."
                   rows={3}
                   value={newTemplate.exit_strategy}
-                  onChange={(e) => setNewTemplate({...newTemplate, exit_strategy: e.target.value})}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewTemplate({...newTemplate, exit_strategy: e.target.value})}
                 />
               </div>
 
@@ -302,7 +281,7 @@ export default function Templates() {
                   id="description"
                   placeholder="Additional notes about this template..."
                   value={newTemplate.description}
-                  onChange={(e) => setNewTemplate({...newTemplate, description: e.target.value})}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewTemplate({...newTemplate, description: e.target.value})}
                 />
               </div>
 
