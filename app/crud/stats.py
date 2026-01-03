@@ -183,3 +183,59 @@ def get_stats_by_date_range(session: Session, start_date: str = None, end_date: 
         "total_profit": total_profit,
         "avg_profit": avg_profit,
     }
+
+def get_performance_calendar(session: Session, month: int, year: int):
+    """Get daily PnL data for a specific month for calendar heatmap"""
+    from datetime import datetime, date
+    from calendar import monthrange
+    
+    trades = session.exec(select(Trade).where(Trade.status == TradeStatus.CLOSED)).all()
+    
+    # Build daily aggregates for the month
+    daily_dict = {}
+    _, num_days = monthrange(year, month)
+    
+    for trade in trades:
+        if trade.closed_at:
+            trade_date = trade.closed_at.date()
+            if trade_date.year == year and trade_date.month == month:
+                if trade_date not in daily_dict:
+                    daily_dict[trade_date] = {
+                        "pnl": 0.0,
+                        "trades": 0,
+                        "wins": 0,
+                        "losses": 0,
+                    }
+                
+                result = calculate_trade_result(trade)
+                daily_dict[trade_date]["pnl"] += result
+                daily_dict[trade_date]["trades"] += 1
+                
+                if result > 0:
+                    daily_dict[trade_date]["wins"] += 1
+                else:
+                    daily_dict[trade_date]["losses"] += 1
+    
+    # Build result array for all days in month (including empty days)
+    result = []
+    for day in range(1, num_days + 1):
+        current_date = date(year, month, day)
+        day_data = daily_dict.get(current_date)
+        
+        if day_data:
+            win_rate = (day_data["wins"] / day_data["trades"] * 100) if day_data["trades"] > 0 else 0
+            result.append({
+                "date": current_date.isoformat(),
+                "pnl": round(day_data["pnl"], 2),
+                "trades": day_data["trades"],
+                "winRate": round(win_rate, 1),
+            })
+        else:
+            result.append({
+                "date": current_date.isoformat(),
+                "pnl": 0.0,
+                "trades": 0,
+                "winRate": 0.0,
+            })
+    
+    return result
