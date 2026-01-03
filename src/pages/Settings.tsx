@@ -330,7 +330,7 @@ export default function Settings() {
                 maxLength="6"
                 placeholder="000000"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOtp(e.target.value.replace(/\D/g, ''))}
                 className="font-mono text-2xl tracking-widest text-center mt-2"
               />
             </div>
@@ -365,7 +365,7 @@ export default function Settings() {
               maxLength="6"
               placeholder="000000"
               value={disableOtp}
-              onChange={(e) => setDisableOtp(e.target.value.replace(/\D/g, ''))}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDisableOtp(e.target.value.replace(/\D/g, ''))}
               className="font-mono text-2xl tracking-widest text-center mt-2"
             />
           </div>

@@ -174,25 +174,21 @@ export default function Templates() {
       </div>
     )
   }
-      title: "Template Deleted",
-      description: "The template has been removed."
-    })
-  }
 
-  const handleEditTemplate = (template: Template) => {
+  const handleEditTemplate = (template: TradeTemplate) => {
     setNewTemplate({
       name: template.name,
       pair: template.pair,
-      type: template.type,
-      entryStrategy: template.entryStrategy,
-      exitStrategy: template.exitStrategy,
-      riskReward: template.riskReward
+      trade_type: template.trade_type,
+      entry_strategy: template.entry_strategy,
+      exit_strategy: template.exit_strategy,
+      risk_reward: template.risk_reward
     })
     setEditingId(template.id)
     setDialogOpen(true)
   }
 
-  const handleUseTemplate = (template: Template) => {
+  const handleUseTemplate = (template: TradeTemplate) => {
     // TODO: Navigate to new trade with template data
     toast({
       title: "Loading Template",

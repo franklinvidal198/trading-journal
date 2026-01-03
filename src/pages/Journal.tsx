@@ -165,7 +165,7 @@ export default function Journal() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="pair">Currency Pair</Label>
-                  <Select value={newEntry.pair} onValueChange={(value) => setNewEntry({...newEntry, pair: value})}>
+                  <Select value={newEntry.pair} onValueChange={(value: string) => setNewEntry({...newEntry, pair: value})}>
                     <SelectTrigger id="pair">
                       <SelectValue placeholder="Select pair" />
                     </SelectTrigger>
@@ -181,7 +181,7 @@ export default function Journal() {
 
                 <div className="space-y-2">
                   <Label>Entry Type</Label>
-                  <RadioGroup value={newEntry.entry_type} onValueChange={(value) => setNewEntry({...newEntry, entry_type: value as any})}>
+                  <RadioGroup value={newEntry.entry_type} onValueChange={(value: string) => setNewEntry({...newEntry, entry_type: value as any})}>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="ANALYSIS" id="analysis" />
                       <Label htmlFor="analysis" className="font-normal">Analysis</Label>
@@ -208,7 +208,7 @@ export default function Journal() {
                   id="title"
                   placeholder="Entry title"
                   value={newEntry.title}
-                  onChange={(e) => setNewEntry({...newEntry, title: e.target.value})}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewEntry({...newEntry, title: e.target.value})}
                 />
               </div>
 
@@ -219,7 +219,7 @@ export default function Journal() {
                   placeholder="Write your journal entry..."
                   rows={6}
                   value={newEntry.content}
-                  onChange={(e) => setNewEntry({...newEntry, content: e.target.value})}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewEntry({...newEntry, content: e.target.value})}
                 />
               </div>
 
@@ -280,7 +280,7 @@ export default function Journal() {
                   <p className="text-muted-foreground whitespace-pre-wrap">{entry.content}</p>
                   {entry.tags && (
                     <div className="mt-3 flex gap-2 flex-wrap">
-                      {entry.tags.split(',').map((tag, i) => (
+                      {entry.tags.split(',').map((tag: string, i: number) => (
                         <span key={i} className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">
                           {tag.trim()}
                         </span>

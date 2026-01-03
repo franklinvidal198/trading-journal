@@ -188,7 +188,7 @@ function Stats() {
                       <YAxis stroke="#888" style={{ fontSize: "12px" }} />
                       <Tooltip
                         contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151" }}
-                        formatter={(value) => `$${value.toFixed(2)}`}
+                        formatter={(value) => `$${typeof value === 'number' ? value.toFixed(2) : value}`}
                       />
                       <Line
                         type="monotone"
@@ -289,7 +289,7 @@ function Stats() {
                     <YAxis stroke="#888" />
                     <Tooltip
                       contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151" }}
-                      formatter={(value) => `$${value.toFixed(2)}`}
+                      formatter={(value) => `$${typeof value === 'number' ? value.toFixed(2) : value}`}
                     />
                     <Legend />
                     <Line

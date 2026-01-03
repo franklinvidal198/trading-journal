@@ -1,4 +1,4 @@
-import { Grip3, List } from 'lucide-react'
+import { Grip, List } from 'lucide-react'
 import {
   ToggleGroup,
   ToggleGroupItem,
@@ -16,7 +16,7 @@ export function ViewModeToggle({ value, onValueChange }: ViewModeToggleProps) {
     <ToggleGroup 
       type="single" 
       value={value}
-      onValueChange={(newValue) => {
+      onValueChange={(newValue: string) => {
         if (newValue) {
           onValueChange(newValue as ViewMode)
         }
@@ -34,7 +34,7 @@ export function ViewModeToggle({ value, onValueChange }: ViewModeToggleProps) {
         aria-label="Grid view"
         title="Grid view"
       >
-        <Grip3 className="h-4 w-4" />
+        <Grip className="h-4 w-4" />
       </ToggleGroupItem>
     </ToggleGroup>
   )
