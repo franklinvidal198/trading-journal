@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -6,79 +6,111 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Trash2, Calendar } from 'lucide-react'
+import { Plus, Trash2, Calendar, Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-
-interface JournalEntry {
-  id: string
-  tradeId: string
-  pair: string
-  type: 'ANALYSIS' | 'MISTAKE' | 'SUCCESS' | 'STRATEGY'
-  title: string
-  content: string
-  createdAt: string
-  date: string
-}
+import { journalAPI, JournalEntry } from '@/lib/api'
+import { useToast } from '@/components/ui/use-toast'
 
 export default function Journal() {
-  const [entries, setEntries] = useState<JournalEntry[]>([
-    {
-      id: '1',
-      tradeId: 'TRADE001',
-      pair: 'EUR/USD',
-      type: 'ANALYSIS',
-      title: 'Post-Trade Analysis',
-      content: 'Trade closed with 25 pips profit. Good risk-reward ratio maintained throughout.',
-      createdAt: '2024-01-15',
-      date: '2024-01-15'
-    },
-    {
-      id: '2',
-      tradeId: 'TRADE002',
-      pair: 'GBP/USD',
-      type: 'MISTAKE',
-      title: 'Overtrading Issue',
-      content: 'Entered too early without waiting for confirmation. Set strict entry rules.',
-      createdAt: '2024-01-14',
-      date: '2024-01-14'
-    }
-  ])
+  const { toast } = useToast()
+  const [entries, setEntries] = useState<JournalEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   const [newEntry, setNewEntry] = useState({
     pair: '',
-    type: 'ANALYSIS' as const,
+    entry_type: 'ANALYSIS' as const,
     title: '',
-    content: ''
+    content: '',
+    tags: ''
   })
 
-  const [dialogOpen, setDialogOpen] = useState(false)
+  // Fetch entries on mount
+  useEffect(() => {
+    fetchEntries()
+  }, [])
 
-  const handleAddEntry = () => {
-    if (newEntry.title && newEntry.content) {
-      const entry: JournalEntry = {
-        id: Date.now().toString(),
-        tradeId: `TRADE${Date.now()}`,
-        pair: newEntry.pair,
-        type: newEntry.type,
-        title: newEntry.title,
-        content: newEntry.content,
-        createdAt: new Date().toISOString(),
-        date: new Date().toISOString().split('T')[0]
-      }
-      setEntries([entry, ...entries])
-      setNewEntry({
-        pair: '',
-        type: 'ANALYSIS',
-        title: '',
-        content: ''
+  const fetchEntries = async () => {
+    try {
+      setLoading(true)
+      const data = await journalAPI.getEntries({ limit: 50 })
+      setEntries(data.data)
+    } catch (error) {
+      console.error('Failed to fetch entries:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load journal entries',
+        variant: 'destructive'
       })
-      setDialogOpen(false)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleDeleteEntry = (id: string) => {
-    setEntries(entries.filter(e => e.id !== id))
+  const handleAddEntry = async () => {
+    if (!newEntry.title || !newEntry.content || !newEntry.pair) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    try {
+      setSaving(true)
+      const createdEntry = await journalAPI.createEntry({
+        pair: newEntry.pair,
+        entry_type: newEntry.entry_type,
+        title: newEntry.title,
+        content: newEntry.content,
+        tags: newEntry.tags || undefined
+      })
+      
+      setEntries([createdEntry, ...entries])
+      setNewEntry({
+        pair: '',
+        entry_type: 'ANALYSIS',
+        title: '',
+        content: '',
+        tags: ''
+      })
+      setDialogOpen(false)
+      
+      toast({
+        title: 'Success',
+        description: 'Journal entry created successfully'
+      })
+    } catch (error) {
+      console.error('Failed to create entry:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to create journal entry',
+        variant: 'destructive'
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteEntry = async (id: number) => {
+    try {
+      await journalAPI.deleteEntry(id)
+      setEntries(entries.filter(e => e.id !== id))
+      toast({
+        title: 'Success',
+        description: 'Journal entry deleted successfully'
+      })
+    } catch (error) {
+      console.error('Failed to delete entry:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete journal entry',
+        variant: 'destructive'
+      })
+    }
   }
 
   const getTypeColor = (type: string) => {
@@ -94,6 +126,17 @@ export default function Journal() {
       default:
         return 'bg-gray-100 text-gray-800 border-gray-300'
     }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading journal entries...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -138,7 +181,7 @@ export default function Journal() {
 
                 <div className="space-y-2">
                   <Label>Entry Type</Label>
-                  <RadioGroup value={newEntry.type} onValueChange={(value) => setNewEntry({...newEntry, type: value as any})}>
+                  <RadioGroup value={newEntry.entry_type} onValueChange={(value) => setNewEntry({...newEntry, entry_type: value as any})}>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="ANALYSIS" id="analysis" />
                       <Label htmlFor="analysis" className="font-normal">Analysis</Label>
@@ -184,8 +227,15 @@ export default function Journal() {
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddEntry}>
-                  Save Entry
+                <Button onClick={handleAddEntry} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    'Save Entry'
+                  )}
                 </Button>
               </div>
             </div>
@@ -204,15 +254,15 @@ export default function Journal() {
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-lg">{entry.title}</h3>
-                        <span className={`px-2 py-1 rounded text-xs font-medium border ${getTypeColor(entry.type)}`}>
-                          {entry.type}
+                        <span className={`px-2 py-1 rounded text-xs font-medium border ${getTypeColor(entry.entry_type)}`}>
+                          {entry.entry_type}
                         </span>
                       </div>
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <span className="font-medium text-primary">{entry.pair}</span>
                         <div className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
-                          <span>{new Date(entry.date).toLocaleDateString()}</span>
+                          <span>{new Date(entry.created_at).toLocaleDateString()}</span>
                         </div>
                       </div>
                     </div>
@@ -228,6 +278,15 @@ export default function Journal() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground whitespace-pre-wrap">{entry.content}</p>
+                  {entry.tags && (
+                    <div className="mt-3 flex gap-2 flex-wrap">
+                      {entry.tags.split(',').map((tag, i) => (
+                        <span key={i} className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">
+                          {tag.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))

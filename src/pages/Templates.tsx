@@ -1,103 +1,179 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Trash2, Copy, Edit2 } from 'lucide-react'
+import { Plus, Trash2, Copy, Edit2, Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useToast } from '@/hooks/use-toast'
-
-interface Template {
-  id: string
-  name: string
-  pair: string
-  type: 'BUY' | 'SELL'
-  entryStrategy: string
-  exitStrategy: string
-  riskReward: string
-  createdAt: string
-}
+import { useToast } from '@/components/ui/use-toast'
+import { templatesAPI, TradeTemplate, TradeTemplateCreate } from '@/lib/api'
 
 export default function Templates() {
   const { toast } = useToast()
-  const [templates, setTemplates] = useState<Template[]>([
-    {
-      id: '1',
-      name: 'Breakout Entry',
-      pair: 'EUR/USD',
-      type: 'BUY',
-      entryStrategy: 'Enter on breakout of resistance level with volume confirmation',
-      exitStrategy: 'Take profit at 1.5:1 risk-reward, stop loss below support',
-      riskReward: '1:1.5',
-      createdAt: '2024-01-15'
-    },
-    {
-      id: '2',
-      name: 'Pullback Strategy',
-      pair: 'GBP/USD',
-      type: 'SELL',
-      entryStrategy: 'Wait for pullback to moving average, sell on rejection',
-      exitStrategy: 'Target support level or 1:2 RR',
-      riskReward: '1:2',
-      createdAt: '2024-01-14'
-    }
-  ])
+  const [templates, setTemplates] = useState<TradeTemplate[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)
 
   const [newTemplate, setNewTemplate] = useState({
     name: '',
     pair: '',
-    type: 'BUY' as const,
-    entryStrategy: '',
-    exitStrategy: '',
-    riskReward: '1:1'
+    trade_type: 'BUY',
+    entry_strategy: '',
+    exit_strategy: '',
+    risk_reward: 1,
+    description: '',
+    tags: ''
   })
 
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  // Fetch templates on mount
+  useEffect(() => {
+    fetchTemplates()
+  }, [])
 
-  const handleAddTemplate = () => {
-    if (newTemplate.name && newTemplate.entryStrategy && newTemplate.exitStrategy) {
-      if (editingId) {
-        setTemplates(templates.map(t => 
-          t.id === editingId 
-            ? {...newTemplate, id: editingId, createdAt: t.createdAt}
-            : t
-        ))
-        toast({
-          title: "Template Updated",
-          description: "Your template has been updated successfully."
-        })
-      } else {
-        const template: Template = {
-          id: Date.now().toString(),
-          ...newTemplate,
-          createdAt: new Date().toISOString().split('T')[0]
-        }
-        setTemplates([template, ...templates])
-        toast({
-          title: "Template Created",
-          description: "Your new template has been saved."
-        })
-      }
-      setNewTemplate({
-        name: '',
-        pair: '',
-        type: 'BUY',
-        entryStrategy: '',
-        exitStrategy: '',
-        riskReward: '1:1'
+  const fetchTemplates = async () => {
+    try {
+      setLoading(true)
+      const data = await templatesAPI.getTemplates({ limit: 50 })
+      setTemplates(data.data)
+    } catch (error) {
+      console.error('Failed to fetch templates:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to load trading templates',
+        variant: 'destructive'
       })
-      setEditingId(null)
-      setDialogOpen(false)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleDeleteTemplate = (id: string) => {
-    setTemplates(templates.filter(t => t.id !== id))
+  const handleAddTemplate = async () => {
+    if (!newTemplate.name || !newTemplate.pair || !newTemplate.entry_strategy || !newTemplate.exit_strategy) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please fill in all required fields',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    try {
+      setSaving(true)
+      
+      if (editingId) {
+        const updated = await templatesAPI.updateTemplate(editingId, {
+          name: newTemplate.name,
+          pair: newTemplate.pair,
+          trade_type: newTemplate.trade_type,
+          entry_strategy: newTemplate.entry_strategy,
+          exit_strategy: newTemplate.exit_strategy,
+          risk_reward: newTemplate.risk_reward,
+          description: newTemplate.description,
+          tags: newTemplate.tags
+        })
+        setTemplates(templates.map(t => t.id === editingId ? updated : t))
+        toast({
+          title: 'Success',
+          description: 'Template updated successfully'
+        })
+      } else {
+        const created = await templatesAPI.createTemplate({
+          name: newTemplate.name,
+          pair: newTemplate.pair,
+          trade_type: newTemplate.trade_type,
+          entry_strategy: newTemplate.entry_strategy,
+          exit_strategy: newTemplate.exit_strategy,
+          risk_reward: newTemplate.risk_reward,
+          description: newTemplate.description || undefined,
+          tags: newTemplate.tags || undefined
+        })
+        setTemplates([created, ...templates])
+        toast({
+          title: 'Success',
+          description: 'Template created successfully'
+        })
+      }
+      
+      setNewTemplate({
+        name: '',
+        pair: '',
+        trade_type: 'BUY',
+        entry_strategy: '',
+        exit_strategy: '',
+        risk_reward: 1,
+        description: '',
+        tags: ''
+      })
+      setEditingId(null)
+      setDialogOpen(false)
+    } catch (error) {
+      console.error('Failed to save template:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to save template',
+        variant: 'destructive'
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteTemplate = async (id: number) => {
+    try {
+      await templatesAPI.deleteTemplate(id)
+      setTemplates(templates.filter(t => t.id !== id))
+      toast({
+        title: 'Success',
+        description: 'Template deleted successfully'
+      })
+    } catch (error) {
+      console.error('Failed to delete template:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to delete template',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleEditTemplate = (template: TradeTemplate) => {
+    setNewTemplate({
+      name: template.name,
+      pair: template.pair,
+      trade_type: template.trade_type,
+      entry_strategy: template.entry_strategy || '',
+      exit_strategy: template.exit_strategy || '',
+      risk_reward: template.risk_reward || 1,
+      description: template.description || '',
+      tags: template.tags || ''
+    })
+    setEditingId(template.id)
+    setDialogOpen(true)
+  }
+
+  const handleUseTemplate = async (template: TradeTemplate) => {
+    // This would open a dialog to create a trade from the template
     toast({
+      title: 'Use Template',
+      description: `Using ${template.name} template to create new trade`,
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Loading templates...</p>
+        </div>
+      </div>
+    )
+  }
       title: "Template Deleted",
       description: "The template has been removed."
     })
@@ -178,7 +254,7 @@ export default function Templates() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="type">Trade Type</Label>
-                  <Select value={newTemplate.type} onValueChange={(value) => setNewTemplate({...newTemplate, type: value as any})}>
+                  <Select value={newTemplate.trade_type} onValueChange={(value) => setNewTemplate({...newTemplate, trade_type: value})}>
                     <SelectTrigger id="type">
                       <SelectValue />
                     </SelectTrigger>
@@ -193,9 +269,11 @@ export default function Templates() {
                   <Label htmlFor="riskReward">Risk:Reward Ratio</Label>
                   <Input 
                     id="riskReward"
-                    placeholder="1:1.5"
-                    value={newTemplate.riskReward}
-                    onChange={(e) => setNewTemplate({...newTemplate, riskReward: e.target.value})}
+                    type="number"
+                    step="0.1"
+                    placeholder="1.5"
+                    value={newTemplate.risk_reward}
+                    onChange={(e) => setNewTemplate({...newTemplate, risk_reward: parseFloat(e.target.value) || 1})}
                   />
                 </div>
               </div>
@@ -206,8 +284,8 @@ export default function Templates() {
                   id="entry"
                   placeholder="Describe your entry conditions..."
                   rows={3}
-                  value={newTemplate.entryStrategy}
-                  onChange={(e) => setNewTemplate({...newTemplate, entryStrategy: e.target.value})}
+                  value={newTemplate.entry_strategy}
+                  onChange={(e) => setNewTemplate({...newTemplate, entry_strategy: e.target.value})}
                 />
               </div>
 
@@ -217,8 +295,18 @@ export default function Templates() {
                   id="exit"
                   placeholder="Describe your exit conditions..."
                   rows={3}
-                  value={newTemplate.exitStrategy}
-                  onChange={(e) => setNewTemplate({...newTemplate, exitStrategy: e.target.value})}
+                  value={newTemplate.exit_strategy}
+                  onChange={(e) => setNewTemplate({...newTemplate, exit_strategy: e.target.value})}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description (Optional)</Label>
+                <Input 
+                  id="description"
+                  placeholder="Additional notes about this template..."
+                  value={newTemplate.description}
+                  onChange={(e) => setNewTemplate({...newTemplate, description: e.target.value})}
                 />
               </div>
 
@@ -229,16 +317,25 @@ export default function Templates() {
                   setNewTemplate({
                     name: '',
                     pair: '',
-                    type: 'BUY',
-                    entryStrategy: '',
-                    exitStrategy: '',
-                    riskReward: '1:1'
+                    trade_type: 'BUY',
+                    entry_strategy: '',
+                    exit_strategy: '',
+                    risk_reward: 1,
+                    description: '',
+                    tags: ''
                   })
                 }}>
                   Cancel
                 </Button>
-                <Button onClick={handleAddTemplate}>
-                  {editingId ? 'Update' : 'Save'} Template
+                <Button onClick={handleAddTemplate} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    `${editingId ? 'Update' : 'Save'} Template`
+                  )}
                 </Button>
               </div>
             </div>
@@ -259,9 +356,14 @@ export default function Templates() {
                       <CardDescription className="mt-2">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-primary">{template.pair}</span>
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${template.type === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            {template.type}
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${template.trade_type === 'BUY' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {template.trade_type}
                           </span>
+                          {template.usage_count > 0 && (
+                            <span className="text-xs text-muted-foreground">
+                              Used {template.usage_count}x
+                            </span>
+                          )}
                         </div>
                       </CardDescription>
                     </div>
@@ -287,15 +389,15 @@ export default function Templates() {
                 <CardContent className="flex-1 space-y-3">
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-1">Entry Strategy</p>
-                    <p className="text-sm">{template.entryStrategy}</p>
+                    <p className="text-sm">{template.entry_strategy}</p>
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-muted-foreground mb-1">Exit Strategy</p>
-                    <p className="text-sm">{template.exitStrategy}</p>
+                    <p className="text-sm">{template.exit_strategy}</p>
                   </div>
                   <div className="pt-3 border-t">
                     <p className="text-xs font-semibold text-muted-foreground">Risk:Reward</p>
-                    <p className="text-lg font-bold text-primary">{template.riskReward}</p>
+                    <p className="text-lg font-bold text-primary">1:{template.risk_reward?.toFixed(2) || '1.00'}</p>
                   </div>
                 </CardContent>
                 <div className="border-t p-3">
