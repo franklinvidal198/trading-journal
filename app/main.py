@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.routes import auth, trades, stats
+from app.api.v1 import journal_api, templates_api, goals_api, reports_api, twofa_api
 from app.core.config import settings, DATA_MODE
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -41,3 +42,8 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(trades.router, prefix="/api/v1/trades", tags=["trades"])
 app.include_router(stats.router, prefix="/api/v1/stats", tags=["stats"])
+app.include_router(journal_api.router)
+app.include_router(templates_api.router)
+app.include_router(goals_api.router)
+app.include_router(reports_api.router)
+app.include_router(twofa_api.router)
