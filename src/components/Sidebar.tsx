@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 interface NavItem {
   name: string
   href: string
-  icon: React.ReactNode
+  icon: JSX.Element
   badge?: number
   subsection?: boolean
 }
