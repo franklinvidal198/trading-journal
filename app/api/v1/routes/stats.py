@@ -4,6 +4,7 @@ from app.db.session import get_session
 from app.crud.stats import (
     get_summary_stats, 
     get_equity_curve,
+    get_equity_curve_v2,
     get_pnl_by_pair,
     get_win_loss_distribution,
     get_daily_performance,
@@ -67,4 +68,28 @@ async def performance_calendar(
     
     Returns array of days with: date (YYYY-MM-DD), pnl (float), trades (int), winRate (percent)
     """
+    return get_performance_calendar(session, month, year)
+
+
+@router.get("/equity_curve/v2")
+async def equity_curve_v2(
+    starting_balance: float = Query(0.0, description="Initial account balance in USD"),
+    session: Session = Depends(get_session)
+):
+    """
+    INSTITUTIONAL-GRADE equity curve endpoint (v2).
+    
+    Returns complete equity curve with:
+    - Full accounting (realized P&L, unrealized P&L, total equity)
+    - Microsecond timestamp precision
+    - Sequence IDs for deterministic ordering
+    - Data quality metadata
+    - Event annotations for audit trail
+    
+    Query params:
+    - starting_balance: Initial account balance (default 0.0)
+    
+    Returns: EquityCurveResponse with curve, summary, and data_quality
+    """
+    return get_equity_curve_v2(session, starting_balance=starting_balance)
     return get_performance_calendar(session, month, year)

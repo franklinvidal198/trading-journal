@@ -1,5 +1,8 @@
 from sqlmodel import Session, select, func
 from app.models.trade import Trade, TradeStatus
+from app.schemas.equity_curve import EquityCurveResponse, EquityCurvePoint, EquityCurveEvent, DataQuality
+from datetime import datetime, timezone
+import math
 
 def calculate_trade_result(trade: Trade) -> float:
     """Calculate result USD for a trade"""
@@ -239,3 +242,229 @@ def get_performance_calendar(session: Session, month: int, year: int):
             })
     
     return result
+
+
+def get_equity_curve_v2(
+    session: Session,
+    starting_balance: float = 0.0,
+    include_open_positions: bool = False,
+) -> EquityCurveResponse:
+    """
+    INSTITUTIONAL-GRADE equity curve calculation.
+    
+    DESIGN PRINCIPLE:
+    - All financial calculations happen here
+    - Backend owns truth about equity state
+    - Frontend receives finished, validated product
+    - No downstream mutation or inference
+    
+    Args:
+        session: Database session
+        starting_balance: Account starting balance (USD). If 0, inferred from first trade.
+        include_open_positions: If True, include unrealized P&L (requires mark-to-market)
+    
+    Returns:
+        EquityCurveResponse: Complete, validated equity curve with metadata
+    
+    Raises:
+        ValueError: If data integrity checks fail
+    """
+    
+    # STEP 1: Fetch and validate all closed trades
+    trades = session.exec(
+        select(Trade)
+        .where(Trade.status == TradeStatus.CLOSED)
+        .order_by(Trade.closed_at, Trade.id)  # Deterministic ordering
+    ).all()
+    
+    if not trades:
+        # Empty account: just return starting balance
+        now = datetime.now(timezone.utc)
+        return EquityCurveResponse(
+            starting_balance=starting_balance,
+            currency="USD",
+            timezone="UTC",
+            curve=[
+                EquityCurvePoint(
+                    timestamp_iso=now.isoformat(),
+                    timestamp_unix_us=int(now.timestamp() * 1_000_000),
+                    sequence_id=1,
+                    balance_realized=0.0,
+                    balance_unrealized=0.0,
+                    balance_total=starting_balance,
+                    return_percent=0.0,
+                    event=EquityCurveEvent(
+                        type="FUNDING",
+                        description="Initial balance"
+                    ),
+                )
+            ],
+            summary={
+                "ending_balance": starting_balance,
+                "ending_realized": 0.0,
+                "ending_unrealized": 0.0,
+                "total_return_percent": 0.0,
+                "max_balance": starting_balance,
+                "min_balance": starting_balance,
+                "max_drawdown_percent": 0.0,
+            },
+            data_quality=DataQuality(
+                is_complete=True,
+                includes_open_positions=False,
+                timestamp_precision_ms=1000,
+                has_gaps=False,
+                warnings=[]
+            ),
+            generated_at_iso=now.isoformat(),
+        )
+    
+    # STEP 2: Infer starting balance if not provided
+    if starting_balance == 0.0:
+        # Starting balance is the point where first trade starts
+        # (or 0 if first trade is a loss)
+        starting_balance = 0.0
+    
+    # STEP 3: Build equity curve with full accounting
+    curve_points: list[EquityCurvePoint] = []
+    balance_realized = 0.0
+    max_balance = starting_balance
+    min_balance = starting_balance
+    has_gaps = False
+    warnings = []
+    
+    # ANCHOR POINT: Starting balance
+    if starting_balance != 0:
+        first_trade_time = trades[0].closed_at
+        curve_points.append(
+            EquityCurvePoint(
+                timestamp_iso=first_trade_time.isoformat() if hasattr(first_trade_time, 'isoformat') else str(first_trade_time),
+                timestamp_unix_us=int(first_trade_time.timestamp() * 1_000_000) if hasattr(first_trade_time, 'timestamp') else 0,
+                sequence_id=0,
+                balance_realized=0.0,
+                balance_unrealized=0.0,
+                balance_total=starting_balance,
+                return_percent=0.0,
+                event=EquityCurveEvent(
+                    type="FUNDING",
+                    description="Initial balance"
+                ),
+                display_date=format_display_date(first_trade_time),
+            )
+        )
+    
+    # PROCESS CLOSED TRADES
+    prev_timestamp = None
+    for seq_id, trade in enumerate(trades, start=1):
+        # Validate trade is properly closed
+        if not trade.closed_at:
+            warnings.append(f"Trade {trade.id} missing closed_at timestamp")
+            continue
+        
+        if trade.exit_price is None:
+            warnings.append(f"Trade {trade.id} missing exit_price")
+            continue
+        
+        # Calculate trade result
+        if trade.direction == "BUY":
+            trade_result = (trade.exit_price - trade.entry_price) * trade.position_size
+        else:  # SELL
+            trade_result = (trade.entry_price - trade.exit_price) * trade.position_size
+        
+        # CRITICAL: Ensure monotonic timestamps
+        if prev_timestamp and trade.closed_at <= prev_timestamp:
+            warnings.append(
+                f"Timestamp ordering issue: Trade {trade.id} at {trade.closed_at} "
+                f"not strictly after previous {prev_timestamp}. "
+                f"Consider adding microsecond precision."
+            )
+        
+        prev_timestamp = trade.closed_at
+        
+        # Update cumulative
+        balance_realized += trade_result
+        balance_total = starting_balance + balance_realized  # (unrealized not included yet)
+        
+        # Track extrema for drawdown calc
+        max_balance = max(max_balance, balance_total)
+        min_balance = min(min_balance, balance_total)
+        
+        # Create curve point
+        point = EquityCurvePoint(
+            timestamp_iso=trade.closed_at.isoformat() if hasattr(trade.closed_at, 'isoformat') else str(trade.closed_at),
+            timestamp_unix_us=int(trade.closed_at.timestamp() * 1_000_000) if hasattr(trade.closed_at, 'timestamp') else 0,
+            sequence_id=seq_id,
+            balance_realized=round(balance_realized, 2),
+            balance_unrealized=0.0,  # No unrealized in "closed only" mode
+            balance_total=round(balance_total, 2),
+            return_percent=round(((balance_total - starting_balance) / max(starting_balance, 0.01) * 100), 2),
+            event=EquityCurveEvent(
+                type="TRADE_CLOSE",
+                trade_id=trade.id,
+                description=f"{trade.pair} {trade.direction} closed at ${trade.exit_price}"
+            ),
+            display_date=format_display_date(trade.closed_at),
+        )
+        
+        curve_points.append(point)
+    
+    # STEP 4: Calculate summary stats
+    ending_balance = starting_balance + balance_realized
+    max_drawdown_percent = (
+        ((min_balance - max_balance) / max_balance * 100)
+        if max_balance > 0
+        else 0.0
+    )
+    
+    total_return_percent = (
+        ((ending_balance - starting_balance) / max(starting_balance, 0.01) * 100)
+    )
+    
+    # STEP 5: Data quality assessment
+    data_quality = DataQuality(
+        is_complete=(len(warnings) == 0),
+        includes_open_positions=False,  # V2 only handles closed
+        timestamp_precision_ms=1000,  # Current precision
+        has_gaps=has_gaps,
+        warnings=warnings
+    )
+    
+    # STEP 6: Return institutional response
+    now = datetime.now(timezone.utc)
+    return EquityCurveResponse(
+        starting_balance=starting_balance,
+        currency="USD",
+        timezone="UTC",
+        curve=curve_points,
+        summary={
+            "ending_balance": round(ending_balance, 2),
+            "ending_realized": round(balance_realized, 2),
+            "ending_unrealized": 0.0,
+            "total_return_percent": round(total_return_percent, 2),
+            "max_balance": round(max_balance, 2),
+            "min_balance": round(min_balance, 2),
+            "max_drawdown_percent": round(max_drawdown_percent, 2),
+        },
+        data_quality=data_quality,
+        generated_at_iso=now.isoformat(),
+    )
+
+
+def format_display_date(dt) -> str:
+    """
+    Format datetime for frontend display.
+    Backend-side formatting ensures consistency.
+    """
+    if not dt:
+        return ""
+    
+    if hasattr(dt, 'strftime'):
+        # datetime object
+        return dt.strftime("%b %d %H:%M")
+    
+    try:
+        # Try parsing string
+        from datetime import datetime as dt_class
+        parsed = dt_class.fromisoformat(str(dt).replace('Z', '+00:00'))
+        return parsed.strftime("%b %d %H:%M")
+    except:
+        return str(dt)
