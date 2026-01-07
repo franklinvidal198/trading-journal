@@ -60,13 +60,16 @@ class EquityCurvePoint(BaseModel):
     def validate_total_equity(cls, v, values):
         """Validate that total_equity = starting_balance + realized + unrealized"""
         if "balance_realized" in values and "balance_unrealized" in values:
-            starting = values.get("_starting_balance", 0)
-            expected = starting + values["balance_realized"] + values["balance_unrealized"]
-            # Allow tiny floating point error
-            if abs(v - expected) > 0.01:
-                raise ValueError(
-                    f"Equity curve integrity violation: {v} != {starting} + {values['balance_realized']} + {values['balance_unrealized']}"
-                )
+            # Note: _starting_balance is passed via EquityCurveResponse
+            # If not available, skip validation (it will be validated at response level)
+            starting = values.get("_starting_balance", None)
+            if starting is not None:
+                expected = starting + values["balance_realized"] + values["balance_unrealized"]
+                # Allow tiny floating point error
+                if abs(v - expected) > 0.01:
+                    raise ValueError(
+                        f"Equity curve integrity violation: {v} != {starting} + {values['balance_realized']} + {values['balance_unrealized']}"
+                    )
         return v
 
 

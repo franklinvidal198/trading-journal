@@ -278,27 +278,13 @@ def get_equity_curve_v2(
     ).all()
     
     if not trades:
-        # Empty account: just return starting balance
+        # Empty account: return empty curve (no data to display yet)
         now = datetime.now(timezone.utc)
-        return EquityCurveResponse(
+        result = EquityCurveResponse(
             starting_balance=starting_balance,
             currency="USD",
             timezone="UTC",
-            curve=[
-                EquityCurvePoint(
-                    timestamp_iso=now.isoformat(),
-                    timestamp_unix_us=int(now.timestamp() * 1_000_000),
-                    sequence_id=1,
-                    balance_realized=0.0,
-                    balance_unrealized=0.0,
-                    balance_total=starting_balance,
-                    return_percent=0.0,
-                    event=EquityCurveEvent(
-                        type="FUNDING",
-                        description="Initial balance"
-                    ),
-                )
-            ],
+            curve=[],  # Empty curve - no trades yet
             summary={
                 "ending_balance": starting_balance,
                 "ending_realized": 0.0,
@@ -317,6 +303,8 @@ def get_equity_curve_v2(
             ),
             generated_at_iso=now.isoformat(),
         )
+        print(f"DEBUG: Returning empty curve. Curve length={len(result.curve)}")
+        return result
     
     # STEP 2: Infer starting balance if not provided
     if starting_balance == 0.0:

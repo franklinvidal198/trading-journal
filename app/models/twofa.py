@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class TwoFactorAuth(SQLModel, table=True):
@@ -25,4 +25,4 @@ class TwoFactorResponse(SQLModel):
     """2FA setup response"""
     secret: str
     qr_code: str  # Base64 encoded QR code
-    backup_codes: list[str]
+    backup_codes: List[str]
