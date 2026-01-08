@@ -5,6 +5,7 @@ import StatsCards from "../../../project/components/stats/stats-cards";
 import TradesTable from "../../../project/components/trades/trades-table";
 import TradeForm from "../../../project/components/trades/trade-form";
 import TodaysSummary from "../../../project/components/stats/todays-summary";
+import PerformanceCalendar from "../components/PerformanceCalendar";
 import { statsAPI, tradesAPI } from "../lib/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
@@ -24,13 +25,6 @@ export default function Dashboard() {
   const [openTradeDialog, setOpenTradeDialog] = useState(false);
   const [showTradeHistory, setShowTradeHistory] = useState(false);
 
-  // Calculate key metrics for alerts and progress
-  const winRate = stats ? Math.round((stats.total_trades > 0 ? (stats.winning_trades / stats.total_trades) * 100 : 0)) : 0;
-  const dailyProfitGoal = 100; // Example goal
-  const dailyProfit = stats?.daily_profit || 0;
-  const profitProgress = Math.min((dailyProfit / dailyProfitGoal) * 100, 100);
-  const hasHighDrawdown = stats?.max_loss && stats.max_loss > 200;
-
   const fetchDashboardData = async () => {
     setLoading(true);
     setError("");
@@ -49,6 +43,13 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // Calculate key metrics for alerts and progress
+  const winRate = stats ? Math.round((stats.total_trades > 0 ? (stats.winning_trades / stats.total_trades) * 100 : 0)) : 0;
+  const dailyProfitGoal = 100; // Example goal
+  const dailyProfit = stats?.daily_profit || 0;
+  const profitProgress = Math.min((dailyProfit / dailyProfitGoal) * 100, 100);
+  const hasHighDrawdown = stats?.max_loss && stats.max_loss > 200;
 
   // Phase 9: Alert user when daily profit goal is achieved
   useEffect(() => {
@@ -285,29 +286,29 @@ export default function Dashboard() {
         </motion.div>
       )}
 
+      {/* Performance Calendar Heatmap */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <PerformanceCalendar />
+      </motion.div>
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent Trades - modular table */}
         <div className="lg:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Trades</CardTitle>
-              <CardDescription>Your last 3 trades</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TradesTable trades={recentTrades} />
-            </CardContent>
-          </Card>
+          <TradesTable trades={recentTrades} />
         </div>
         {/* Quick Actions - modular form */}
         <div>
           <TradeForm onSuccess={fetchDashboardData} />
         </div>
-      </div>
-
-      {/* Today's Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <TodaysSummary stats={stats} />
+        {/* Today's Summary - modular component */}
+        <div>
+          <TodaysSummary stats={stats} />
+        </div>
       </div>
     </div>
   );

@@ -21,6 +21,33 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
+// Inner component that uses auth context
+const AppContent = () => {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        {/* Protected routes with layout */}
+        <Route path="/" element={<Layout />}>
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="trades" element={<Trades />} />
+          <Route path="stats" element={<Stats />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="journal" element={<Journal />} />
+          <Route path="templates" element={<Templates />} />
+          <Route path="goals" element={<Goals />} />
+          <Route path="reports" element={<Reports />} />
+        </Route>
+        {/* 404 catch-all */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
+  );
+};
+
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -28,27 +55,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <AuthProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/signup" element={<Signup />} />
-              {/* Protected routes with layout */}
-              <Route path="/" element={<Layout />}>
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="trades" element={<Trades />} />
-                <Route path="stats" element={<Stats />} />
-                <Route path="profile" element={<Profile />} />
-                <Route path="settings" element={<Settings />} />
-                <Route path="journal" element={<Journal />} />
-                <Route path="templates" element={<Templates />} />
-                <Route path="goals" element={<Goals />} />
-                <Route path="reports" element={<Reports />} />
-              </Route>
-              {/* 404 catch-all */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+          <AppContent />
         </AuthProvider>
       </TooltipProvider>
     </QueryClientProvider>

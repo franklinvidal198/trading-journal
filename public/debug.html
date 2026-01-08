@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Frontend Debug Test</h1>
+    
+    <div id="status"></div>
+    
+    <script>
+        const statusDiv = document.getElementById('status');
+        
+        function log(msg, type = 'info') {
+            const p = document.createElement('p');
+            p.className = type;
+            p.textContent = msg;
+            statusDiv.appendChild(p);
+            console.log('[' + type.toUpperCase() + ']', msg);
+        }
+        
+        log('Script started', 'info');
+        log('Checking frontend server...', 'info');
+        
+        // Check if the main app loads
+        fetch('http://localhost:8080/src/main.tsx')
+            .then(r => {
+                if (r.ok) {
+                    log('✓ Frontend server is responding (8080)', 'success');
+                } else {
+                    log('✗ Frontend returned status: ' + r.status, 'error');
+                }
+            })
+            .catch(e => {
+                log('✗ Cannot reach frontend: ' + e.message, 'error');
+            });
+        
+        // Check if backend is running
+        fetch('http://localhost:8001/api/v1/system/mode')
+            .then(r => {
+                if (r.ok) {
+                    log('✓ Backend server is responding (8001)', 'success');
+                    return r.json();
+                } else {
+                    log('✗ Backend returned status: ' + r.status, 'error');
+                }
+            })
+            .then(data => {
+                if (data) {
+                    log('Backend mode: ' + data.mode, 'info');
+                }
+            })
+            .catch(e => {
+                log('✗ Cannot reach backend: ' + e.message, 'error');
+            });
+        
+        // Check localStorage
+        log('Token in localStorage: ' + (localStorage.getItem('token') ? 'YES' : 'NO'), 'info');
+        
+        // Suggest next steps
+        setTimeout(() => {
+            log('---', 'info');
+            log('Visit http://localhost:8080/demo.html to set auth token and load the app', 'success');
+        }, 2000);
+    </script>
+</body>
+</html>

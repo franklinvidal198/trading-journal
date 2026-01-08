@@ -57,25 +57,25 @@ interface EnhancedPoint extends EquityCurvePoint {
  * DATA ENHANCEMENT: Zero-crossing interpolation and null masking.
  * 
  * PURPOSE:
- * - Inject synthetic points at exact zero crossings
- * - Eliminate area fill artifacts at sign changes
+ * - Inject synthetic points at starting balance threshold crossings
+ * - Eliminate area fill artifacts at profit/loss boundary
  * - Use null masking to control which areas render
  * - Preserve X-domain continuity for tooltips and animation
  * 
  * INVARIANTS:
  * - Every point has balance_total (source of truth)
  * - Synthetic points marked with isSynthetic = true
- * - balance_positive = balance_total >= 0 ? balance_total : null
- * - balance_negative = balance_total <= 0 ? balance_total : null
+ * - balance_positive = balance_total >= starting_balance ? balance_total : null (PROFIT ZONE)
+ * - balance_negative = balance_total <= starting_balance ? balance_total : null (LOSS ZONE)
  * - No filtering: full dataset preserved for all series
  * 
  * WHY THIS WORKS:
- * - Profit Area uses balance_positive (renders nothing when < 0)
- * - Loss Area uses balance_negative (renders nothing when > 0)
- * - Synthetic points at zero satisfy both conditions
+ * - Profit Area uses balance_positive (renders GREEN when equity > starting balance)
+ * - Loss Area uses balance_negative (renders RED when equity < starting balance)
+ * - Synthetic points at starting_balance satisfy both conditions
  * - Linear interpolation ensures smooth, honest continuity
  */
-function enhanceEquityCurveData(points: EquityCurvePoint[]): EnhancedPoint[] {
+function enhanceEquityCurveData(points: EquityCurvePoint[], startingBalance: number): EnhancedPoint[] {
   if (points.length === 0) return [];
 
   const enhanced: EnhancedPoint[] = [];
@@ -83,46 +83,57 @@ function enhanceEquityCurveData(points: EquityCurvePoint[]): EnhancedPoint[] {
   for (let i = 0; i < points.length; i++) {
     const current = points[i];
 
+    // Skip FUNDING events (initial balance) - they're anchors, not real data points
+    if (current.event?.type === "FUNDING") {
+      continue;
+    }
+
     // Add the current point with masking
     const enhancedCurrent: EnhancedPoint = {
       ...current,
-      balance_positive: current.balance_total >= 0 ? current.balance_total : null,
-      balance_negative: current.balance_total <= 0 ? current.balance_total : null,
+      balance_positive: current.balance_total >= startingBalance ? current.balance_total : null,
+      balance_negative: current.balance_total <= startingBalance ? current.balance_total : null,
     };
     enhanced.push(enhancedCurrent);
 
-    // Check for zero crossing to next point
+    // Check for threshold crossing to next point
     if (i < points.length - 1) {
       const next = points[i + 1];
-      const currentSign = Math.sign(current.balance_total);
-      const nextSign = Math.sign(next.balance_total);
+      
+      // Skip FUNDING events
+      if (next.event?.type === "FUNDING") {
+        continue;
+      }
 
-      // Zero crossing detected (sign change, excluding 0 → positive or negative)
-      if (currentSign !== nextSign && currentSign !== 0 && nextSign !== 0) {
-        // Linear interpolation: find exact timestamp where balance_total == 0
+      const currentAboveThreshold = current.balance_total >= startingBalance;
+      const nextAboveThreshold = next.balance_total >= startingBalance;
+
+      // Threshold crossing detected (starting_balance boundary crossed)
+      if (currentAboveThreshold !== nextAboveThreshold) {
+        // Linear interpolation: find exact timestamp where balance_total == startingBalance
         // balance_total = current + (next - current) * t
-        // 0 = current + (next - current) * t
-        // t = -current / (next - current)
+        // starting_balance = current + (next - current) * t
+        // t = (starting_balance - current) / (next - current)
 
-        const t = -current.balance_total / (next.balance_total - current.balance_total);
+        const t = (startingBalance - current.balance_total) / (next.balance_total - current.balance_total);
         const interpolatedTimestamp =
           current.timestamp_unix_us + t * (next.timestamp_unix_us - current.timestamp_unix_us);
 
-        // Create synthetic point at exact zero crossing
+        // Create synthetic point at exact threshold crossing
         const syntheticPoint: EnhancedPoint = {
           ...current,
           timestamp_unix_us: interpolatedTimestamp,
           timestamp_iso: new Date(interpolatedTimestamp / 1000).toISOString(),
           display_date: current.display_date, // Use current's date label
-          balance_total: 0,
+          balance_total: startingBalance,
           balance_realized: current.balance_realized, // Preserve for audit
           balance_unrealized: current.balance_unrealized,
-          return_percent: 0,
+          return_percent: ((startingBalance - startingBalance) / startingBalance) * 100,
           sequence_id: current.sequence_id + 0.5, // Between current and next
           event: undefined, // Not a real trade event
           isSynthetic: true,
-          balance_positive: 0, // Zero is >= 0
-          balance_negative: 0, // Zero is <= 0
+          balance_positive: startingBalance, // Starting balance is at threshold
+          balance_negative: startingBalance, // Starting balance is at threshold
         };
 
         enhanced.push(syntheticPoint);
@@ -160,7 +171,7 @@ function decimate(
     return points;
   }
 
-  const decimated: EquityCurvePoint[] = [];
+  const decimated: EnhancedPoint[] = [];
   const binSize = Math.ceil(points.length / maxPoints);
 
   // Preserve first point (important for starting context)
@@ -302,11 +313,11 @@ export default function RunningPL({
     return issues;
   }, [data]);
 
-  // ENHANCEMENT: Inject synthetic points at zero crossings
+  // ENHANCEMENT: Inject synthetic points at threshold crossings (relative to starting balance)
   const enhancedData = useMemo(() => {
-    if (!data?.curve) return [];
-    return enhanceEquityCurveData(data.curve);
-  }, [data?.curve]);
+    if (!data?.curve || !data?.starting_balance) return [];
+    return enhanceEquityCurveData(data.curve, data.starting_balance);
+  }, [data?.curve, data?.starting_balance]);
 
   // DECIMATION: Optimize for rendering performance (works on enhanced data)
   const decimatedData = useMemo(() => {
@@ -403,7 +414,7 @@ export default function RunningPL({
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {decimatedData.length > data.curve.length
                 ? `Showing ${decimatedData.length} of ${data.curve.length} points (decimated for performance)`
-                : `${data.curve.length} trades`}
+                : `${Math.max(0, data.curve.length - 1)} trades`}
             </p>
           </div>
           <div className="text-right">
@@ -570,16 +581,16 @@ export default function RunningPL({
               />
             )}
 
-            {/* ZERO LINE EMPHASIS: Must visually dominate as psychological boundary */}
+            {/* STARTING BALANCE THRESHOLD: Must visually dominate as psychological boundary */}
             {/* Solid line (no dashes), higher stroke weight, higher opacity */}
             <ReferenceLine
-              y={0}
+              y={data.starting_balance}
               stroke={colors.reference}
               strokeDasharray={CHART_DEFAULTS.referenceLineDasharray}
               strokeWidth={CHART_DEFAULTS.referenceLineWidth}
               strokeOpacity={CHART_DEFAULTS.referenceLineOpacity}
               label={{
-                value: "Breakeven",
+                value: `Starting: $${data.starting_balance.toLocaleString()}`,
                 position: "right",
                 fill: colors.reference,
                 fontSize: 12,

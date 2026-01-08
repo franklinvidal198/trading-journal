@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001/api/v1';
+// API Configuration - Using Django Backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // Create axios instance
 export const api = axios.create({
@@ -100,6 +100,13 @@ export interface DailyPerformance {
   date: string;
   profit: number;
   trades: number;
+}
+
+export interface PerformanceCalendarDay {
+  date: string;
+  pnl: number;
+  trades: number;
+  winRate: number;
 }
 
 export interface DateRangeStats {
@@ -291,6 +298,54 @@ export const tradesAPI = {
   },
 };
 
+// ============================================================================
+// INSTITUTIONAL-GRADE EQUITY CURVE TYPES
+// ============================================================================
+
+export interface EquityCurveEvent {
+  type: "TRADE_CLOSE" | "TRADE_OPEN" | "MARK_TO_MARKET" | "FUNDING";
+  trade_id?: number;
+  description?: string;
+}
+
+export interface EquityCurvePoint {
+  timestamp_iso: string;
+  timestamp_unix_us: number;
+  sequence_id: number;
+  balance_realized: number;
+  balance_unrealized: number;
+  balance_total: number;
+  return_percent: number;
+  event: EquityCurveEvent;
+  display_date?: string;
+}
+
+export interface DataQuality {
+  is_complete: boolean;
+  includes_open_positions: boolean;
+  timestamp_precision_ms: number;
+  has_gaps: boolean;
+  warnings: string[];
+}
+
+export interface EquityCurveResponse {
+  starting_balance: number;
+  currency: string;
+  timezone: string;
+  curve: EquityCurvePoint[];
+  summary: {
+    ending_balance: number;
+    ending_realized: number;
+    ending_unrealized: number;
+    total_return_percent: number;
+    max_balance: number;
+    min_balance: number;
+    max_drawdown_percent: number;
+  };
+  data_quality: DataQuality;
+  generated_at_iso: string;
+}
+
 // Stats API
 export const statsAPI = {
   getSummary: async (): Promise<TradingStats> => {
@@ -300,6 +355,22 @@ export const statsAPI = {
   
   getEquityCurve: async (): Promise<EquityPoint[]> => {
     const response = await api.get('/stats/equity_curve');
+    return response.data;
+  },
+
+  /**
+   * Get institutional-grade equity curve (v2)
+   * 
+   * Returns complete equity data with:
+   * - Realized and unrealized P&L
+   * - Microsecond timestamps with sequence IDs
+   * - Data quality metadata
+   * - Event audit trail
+   */
+  getEquityCurveV2: async (startingBalance: number = 0): Promise<EquityCurveResponse> => {
+    const response = await api.get('/stats/equity_curve/v2', {
+      params: { starting_balance: startingBalance }
+    });
     return response.data;
   },
 
@@ -321,6 +392,13 @@ export const statsAPI = {
   getStatsByDateRange: async (startDate?: string, endDate?: string): Promise<DateRangeStats> => {
     const response = await api.get('/stats/by_date_range', { 
       params: { start_date: startDate, end_date: endDate } 
+    });
+    return response.data;
+  },
+
+  getPerformanceCalendar: async (month: number, year: number): Promise<PerformanceCalendarDay[]> => {
+    const response = await api.get('/stats/performance_calendar', { 
+      params: { month, year } 
     });
     return response.data;
   },
