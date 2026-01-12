@@ -13,6 +13,7 @@ class TradeStatus(str, enum.Enum):
 
 class Trade(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
     pair: str
     direction: TradeDirection
     entry_price: float

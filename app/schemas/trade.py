@@ -28,6 +28,7 @@ class TradeUpdate(BaseModel):
 
 class TradeRead(TradeBase):
     id: int
+    user_id: int
     exit_price: Optional[float]
     status: TradeStatus
     opened_at: datetime

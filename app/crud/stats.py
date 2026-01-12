@@ -26,8 +26,10 @@ def calculate_trade_risk_reward(trade: Trade) -> float:
         return 0
     return reward / risk
 
-def get_summary_stats(session: Session):
-    trades = session.exec(select(Trade).where(Trade.status == TradeStatus.CLOSED)).all()
+def get_summary_stats(session: Session, user_id: int):
+    trades = session.exec(select(Trade).where(
+        (Trade.user_id == user_id) & (Trade.status == TradeStatus.CLOSED)
+    )).all()
     total = len(trades)
     
     # Calculate results for each trade
@@ -61,8 +63,10 @@ def get_summary_stats(session: Session):
         "max_loss": max_loss,
     }
 
-def get_equity_curve(session: Session):
-    trades = session.exec(select(Trade).where(Trade.status == TradeStatus.CLOSED).order_by(Trade.closed_at)).all()
+def get_equity_curve(session: Session, user_id: int):
+    trades = session.exec(select(Trade).where(
+        (Trade.user_id == user_id) & (Trade.status == TradeStatus.CLOSED)
+    ).order_by(Trade.closed_at)).all()
     curve = []
     balance = 0
     for t in trades:
@@ -70,9 +74,11 @@ def get_equity_curve(session: Session):
         balance += result
         curve.append({"date": t.closed_at, "balance": balance})
     return curve
-def get_pnl_by_pair(session: Session):
+def get_pnl_by_pair(session: Session, user_id: int):
     """Get P&L breakdown by trading pair"""
-    trades = session.exec(select(Trade).where(Trade.status == TradeStatus.CLOSED)).all()
+    trades = session.exec(select(Trade).where(
+        (Trade.user_id == user_id) & (Trade.status == TradeStatus.CLOSED)
+    )).all()
     
     pnl_dict = {}
     for trade in trades:
@@ -89,9 +95,11 @@ def get_pnl_by_pair(session: Session):
     
     return [{"pair": pair, **data} for pair, data in pnl_dict.items()]
 
-def get_win_loss_distribution(session: Session):
+def get_win_loss_distribution(session: Session, user_id: int):
     """Get win/loss distribution for pie chart"""
-    trades = session.exec(select(Trade).where(Trade.status == TradeStatus.CLOSED)).all()
+    trades = session.exec(select(Trade).where(
+        (Trade.user_id == user_id) & (Trade.status == TradeStatus.CLOSED)
+    )).all()
     
     wins = 0
     losses = 0
@@ -110,11 +118,13 @@ def get_win_loss_distribution(session: Session):
         "loss_percentage": (losses / total * 100) if total else 0,
     }
 
-def get_daily_performance(session: Session, days: int = 30):
+def get_daily_performance(session: Session, user_id: int, days: int = 30):
     """Get daily P&L for the last N days"""
     from datetime import datetime, timedelta
     
-    trades = session.exec(select(Trade).where(Trade.status == TradeStatus.CLOSED)).all()
+    trades = session.exec(select(Trade).where(
+        (Trade.user_id == user_id) & (Trade.status == TradeStatus.CLOSED)
+    )).all()
     
     daily_dict = {}
     start_date = datetime.now().date() - timedelta(days=days)
@@ -139,11 +149,13 @@ def get_daily_performance(session: Session, days: int = 30):
     
     return [{"date": date, **data} for date, data in sorted(daily_dict.items())]
 
-def get_stats_by_date_range(session: Session, start_date: str = None, end_date: str = None):
+def get_stats_by_date_range(session: Session, user_id: int, start_date: str = None, end_date: str = None):
     """Get stats filtered by date range"""
     from datetime import datetime
     
-    query = select(Trade).where(Trade.status == TradeStatus.CLOSED)
+    query = select(Trade).where(
+        (Trade.user_id == user_id) & (Trade.status == TradeStatus.CLOSED)
+    )
     
     if start_date:
         start = datetime.fromisoformat(start_date).date()
@@ -187,12 +199,12 @@ def get_stats_by_date_range(session: Session, start_date: str = None, end_date: 
         "avg_profit": avg_profit,
     }
 
-def get_performance_calendar(session: Session, month: int, year: int):
+def get_performance_calendar(session: Session, user_id: int, month: int, year: int):
     """Get daily PnL data for a specific month for calendar heatmap"""
     from datetime import datetime, date
     from calendar import monthrange
     
-    trades = session.exec(select(Trade).where(Trade.status == TradeStatus.CLOSED)).all()
+    trades = session.exec(select(Trade).where(Trade.user_id == user_id, Trade.status == TradeStatus.CLOSED)).all()
     
     # Build daily aggregates for the month
     daily_dict = {}

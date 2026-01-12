@@ -18,7 +18,7 @@ def calculate_total_profit(trades: list):
 
 @router.get("/summary")
 def get_summary(session: Session = Depends(get_session), current_user = Depends(get_current_user)):
-    trades = session.exec(select(Trade).where(Trade.user_id == current_user["id"])).all()
+    trades = session.exec(select(Trade).where(Trade.user_id == current_user.id)).all()
     closed_trades = [t for t in trades if t.status == "CLOSED"]
     return {
         "total_trades": len(trades),
@@ -30,7 +30,7 @@ def get_summary(session: Session = Depends(get_session), current_user = Depends(
 
 @router.get("/by-pair")
 def get_pair_statistics(session: Session = Depends(get_session), current_user = Depends(get_current_user)):
-    trades = session.exec(select(Trade).where(Trade.user_id == current_user["id"])).all()
+    trades = session.exec(select(Trade).where(Trade.user_id == current_user.id)).all()
     pair_data = {}
     for trade in trades:
         pair = trade.pair or "UNKNOWN"
