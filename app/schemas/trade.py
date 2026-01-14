@@ -14,7 +14,9 @@ class TradeBase(BaseModel):
     screenshot: Optional[str] = None
 
 class TradeCreate(TradeBase):
-    pass
+    exit_price: Optional[float] = Field(None, gt=0)
+    status: Optional[TradeStatus] = None
+    closed_at: Optional[datetime] = None
 
 class TradeUpdate(BaseModel):
     entry_price: Optional[float] = Field(None, gt=0)

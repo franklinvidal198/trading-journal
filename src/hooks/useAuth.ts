@@ -1,6 +1,6 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { authAPI, User } from '@/lib/api';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
@@ -38,15 +38,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('token', response.access_token);
       const user = await authAPI.getProfile();
       setUser(user);
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully logged in.",
+      toast.success('Welcome back!', {
+        description: 'You have successfully logged in.',
       });
     } catch (error: any) {
-      toast({
-        title: "Login failed",
-        description: error.response?.data?.detail || "Invalid credentials",
-        variant: "destructive",
+      const errorMessage = error.response?.data?.detail || 'Invalid credentials';
+      toast.error('Login failed', {
+        description: errorMessage,
       });
       throw error;
     }
@@ -59,15 +57,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.setItem('token', response.access_token);
         const user = await authAPI.getProfile();
         setUser(user);
-        toast({
-          title: "Account created!",
-          description: "Welcome to TradeJournal 2090.",
+        toast.success('Account created!', {
+          description: 'Welcome to TradeJournal 2090.',
         });
       } catch (error: any) {
-        toast({
-          title: "Signup failed",
-          description: error.response?.data?.detail || "Failed to create account",
-          variant: "destructive",
+        const errorMessage = error.response?.data?.detail || 'Failed to create account';
+        toast.error('Signup failed', {
+          description: errorMessage,
         });
         throw error;
       }
@@ -76,9 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     localStorage.removeItem('token');
     setUser(null);
-    toast({
-      title: "Logged out",
-      description: "You have been successfully logged out.",
+    toast.success('Logged out', {
+      description: 'You have been successfully logged out.',
     });
   };
 
